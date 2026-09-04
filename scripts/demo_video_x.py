@@ -157,24 +157,34 @@ dummpy_set = edict({
 })
 
 res_keys = [
-    'pred_uvd',
-    'pred_xyz_17',
-    'pred_xyz_29',
-    'pred_xyz_24_struct',
-    'pred_scores',
-    'pred_camera',
-    'f',
-    'pred_betas',
-    'pred_thetas',
+    'pred_uvd_jts',
+    'pred_xyz_hybrik',
+    'pred_xyz_hybrik_struct',
+    'pred_xyz_full',
+    'pred_uv_full',
+
+    'pred_lh_uvd',
+    'pred_rh_uvd',
+
+    'pred_theta_quat',
+    'pred_theta_mat',
     'pred_phi',
-    'scale_mult',
+
+    'pred_shape_full',
+    'pred_beta',
+    'pred_expression',
+
+    'pred_sigma',
+    'scores',
+
+    'pred_camera',
     'pred_cam_root',
-    # 'features',
     'transl',
+
     'bbox',
     'height',
     'width',
-    'img_path'
+    'img_path',
 ]
 res_db = {k: [] for k in res_keys}
 
@@ -327,6 +337,16 @@ for img_path in tqdm(img_path_list):
             # al_hands=hand_uv_jts.to(pose_input.device).unsqueeze(0).float(),
             # al_hands_leaf=hand_leaf_uv_jts.to(pose_input.device).unsqueeze(0).float(),
         )
+        
+        if idx == 0:
+            print("pose_output type:", type(pose_output))
+
+            for key in pose_output.keys():
+                value = pose_output[key]
+                if hasattr(value, "shape"):
+                    print(f"{key}: shape={value.shape}")
+                else:
+                    print(f"{key}: type={type(value)}")
 
         uv_jts = pose_output.pred_uvd_jts.reshape(-1, 3)[:, :2]
         # uv_jts[25:55, :2] = hand_uv_jts
@@ -369,7 +389,6 @@ for img_path in tqdm(img_path_list):
             res_path = os.path.join(opt.out_dir, 'res_images', f'image-{idx:06d}.jpg')
             cv2.imwrite(res_path, image_vis)
         write_stream.write(image_vis)
-        '''
         # vis 2d
         pts = uv_jts * bbox_xywh[2]
         pts[:, 0] = pts[:, 0] + bbox_xywh[0]
@@ -386,46 +405,109 @@ for img_path in tqdm(img_path_list):
             cv2.imwrite(res_path, bbox_img)
 
         if opt.save_pt:
-            assert pose_input.shape[0] == 1, 'Only support single batch inference for now'
+            assert pose_input.shape[0] == 1, \
+                'Only support single batch inference for now'
 
-            pred_xyz_jts_17 = pose_output.pred_xyz_jts_17.reshape(
-                17, 3).cpu().data.numpy()
+            # 71 HybrIK-X joints, [71, 3]
             pred_uvd_jts = pose_output.pred_uvd_jts.reshape(
-                -1, 3).cpu().data.numpy()
-            pred_xyz_jts_29 = pose_output.pred_xyz_jts_29.reshape(
-                -1, 3).cpu().data.numpy()
-            pred_xyz_jts_24_struct = pose_output.pred_xyz_jts_24_struct.reshape(
-                24, 3).cpu().data.numpy()
-            pred_scores = pose_output.maxvals.cpu(
-            ).data[:, :29].reshape(29).numpy()
-            pred_camera = pose_output.pred_camera.squeeze(
-                dim=0).cpu().data.numpy()
-            pred_betas = pose_output.pred_shape.squeeze(
-                dim=0).cpu().data.numpy()
-            pred_theta = pose_output.pred_theta_mats.squeeze(
-                dim=0).cpu().data.numpy()
-            pred_phi = pose_output.pred_phi.squeeze(dim=0).cpu().data.numpy()
-            pred_cam_root = pose_output.cam_root.squeeze(dim=0).cpu().numpy()
-            img_size = np.array((input_image.shape[0], input_image.shape[1]))
+                71, 3).detach().cpu().numpy()
 
-            res_db['pred_xyz_17'].append(pred_xyz_jts_17)
-            res_db['pred_uvd'].append(pred_uvd_jts)
-            res_db['pred_xyz_29'].append(pred_xyz_jts_29)
-            res_db['pred_xyz_24_struct'].append(pred_xyz_jts_24_struct)
-            res_db['pred_scores'].append(pred_scores)
-            res_db['pred_camera'].append(pred_camera)
-            res_db['f'].append(1000.0)
-            res_db['pred_betas'].append(pred_betas)
-            res_db['pred_thetas'].append(pred_theta)
+            pred_xyz_hybrik = pose_output.pred_xyz_hybrik.reshape(
+                71, 3).detach().cpu().numpy()
+
+            pred_xyz_hybrik_struct = pose_output.pred_xyz_hybrik_struct.reshape(
+                71, 3).detach().cpu().numpy()
+
+            # Full SMPL-X joints, [127, 3]
+            pred_xyz_full = pose_output.pred_xyz_full.reshape(
+                127, 3).detach().cpu().numpy()
+
+            pred_uv_full = pose_output.pred_uv_full.reshape(
+                127, 2).detach().cpu().numpy()
+
+            # Hands
+            pred_lh_uvd = pose_output.pred_lh_uvd.squeeze(
+                0).detach().cpu().numpy()
+
+            pred_rh_uvd = pose_output.pred_rh_uvd.squeeze(
+                0).detach().cpu().numpy()
+
+            # SMPL-X pose
+            pred_theta_quat = pose_output.pred_theta_quat.squeeze(
+                0).detach().cpu().numpy()
+
+            pred_theta_mat = pose_output.pred_theta_mat.squeeze(
+                0).detach().cpu().numpy()
+
+            pred_phi = pose_output.pred_phi.squeeze(
+                0).detach().cpu().numpy()
+
+            # Shape / expression
+            pred_shape_full = pose_output.pred_shape_full.squeeze(
+                0).detach().cpu().numpy()
+
+            pred_beta = pose_output.pred_beta.squeeze(
+                0).detach().cpu().numpy()
+
+            pred_expression = pose_output.pred_expression.squeeze(
+                0).detach().cpu().numpy()
+
+            # Confidence
+            pred_sigma = pose_output.pred_sigma.squeeze(
+                0).detach().cpu().numpy()
+
+            scores = pose_output.scores.squeeze(
+                0).detach().cpu().numpy()
+
+            # Camera / translation
+            pred_camera = pose_output.pred_camera.squeeze(
+                0).detach().cpu().numpy()
+
+            pred_cam_root = pose_output.cam_root.squeeze(
+                0).detach().cpu().numpy()
+
+            transl_np = pose_output.transl.squeeze(
+                0).detach().cpu().numpy()
+
+            img_size = np.array(
+                (input_image.shape[0], input_image.shape[1])
+            )
+
+            res_db['pred_uvd_jts'].append(pred_uvd_jts)
+            res_db['pred_xyz_hybrik'].append(pred_xyz_hybrik)
+            res_db['pred_xyz_hybrik_struct'].append(
+                pred_xyz_hybrik_struct)
+
+            res_db['pred_xyz_full'].append(pred_xyz_full)
+            res_db['pred_uv_full'].append(pred_uv_full)
+
+            res_db['pred_lh_uvd'].append(pred_lh_uvd)
+            res_db['pred_rh_uvd'].append(pred_rh_uvd)
+
+            res_db['pred_theta_quat'].append(pred_theta_quat)
+            res_db['pred_theta_mat'].append(pred_theta_mat)
             res_db['pred_phi'].append(pred_phi)
+
+            res_db['pred_shape_full'].append(pred_shape_full)
+            res_db['pred_beta'].append(pred_beta)
+            res_db['pred_expression'].append(pred_expression)
+
+            res_db['pred_sigma'].append(pred_sigma)
+            res_db['scores'].append(scores)
+
+            res_db['pred_camera'].append(pred_camera)
             res_db['pred_cam_root'].append(pred_cam_root)
-            # res_db['features'].append(img_feat)
-            res_db['transl'].append(transl[0].cpu().data.numpy())
+            res_db['transl'].append(transl_np)
+
             res_db['bbox'].append(np.array(bbox))
             res_db['height'].append(img_size[0])
             res_db['width'].append(img_size[1])
             res_db['img_path'].append(img_path)
-        '''
 
 write_stream.release()
 write2d_stream.release()
+
+if opt.save_pt:
+    save_path = os.path.join(opt.out_dir, 'hybrikx_output.pt')
+    torch.save(res_db, save_path)
+    print(f'Prediction saved to: {save_path}')

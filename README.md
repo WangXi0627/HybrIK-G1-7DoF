@@ -90,6 +90,16 @@ conda install -c fvcore -c iopath -c conda-forge fvcore iopath
 conda install -c bottler nvidiacub
 pip install git+ssh://git@github.com/facebookresearch/pytorch3d.git@stable
 
+# 报错: libtorch_cpu.so: undefined symbol: iJIT_NotifyEvent
+# 解决: 降级 MKL & 固定版本
+conda install -y "mkl=2024.0.0"
+conda config --env --add pinned_packages "mkl<2024.1"
+
+# 重新装合适的CUDA版本
+conda install -y pytorch==1.9.1 torchvision==0.10.1 cudatoolkit=11.1 "mkl<2024.1" numpy=1.23.5 -c pytorch -c conda-forge
+# 重装合适的pytorch3D
+conda install -y pytorch3d=0.6.1 -c pytorch3d -c pytorch -c conda-forge
+
 # 4. Pull our code
 git clone https://github.com/Jeff-sjtu/HybrIK.git
 cd HybrIK

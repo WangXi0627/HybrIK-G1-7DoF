@@ -108,3 +108,8 @@ data
 data/
 exp
 model_files
+
+# wx
+examples
+res
+pretrained_models
